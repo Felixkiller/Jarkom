@@ -1,6 +1,6 @@
 import socket
+import ssl
 import base64
-import time
 
 # SMTP commands
 HELO_CMD = "HELO client\r\n"
@@ -9,16 +9,17 @@ MAIL_FROM_CMD = "MAIL FROM: <{}>\r\n"
 RCPT_TO_CMD = "RCPT TO: <{}>\r\n"
 DATA_CMD = "DATA\r\n"
 QUIT_CMD = "QUIT\r\n"
+STARTTLS_CMD = "STARTTLS\r\n"
 
 # SMTP server info
-SMTP_SERVER = "smtp.ukdc.ac.id"  # Example: Gmail SMTP server
-SMTP_PORT = 587  # Use 587 for TLS, or 465 for SSL
-SMTP_USER = "felixjuatsa@gmail.com"  # Replace with your email address
-SMTP_PASSWORD = "your_password"  # Replace with your email password (or app password if 2FA enabled)
+SMTP_SERVER = "smtp.gmail.com"  # Ganti dengan server SMTP Anda
+SMTP_PORT = 465  # Port untuk SSL
+SMTP_USER = "felixjuatsa@gmail.com"  # Ganti dengan email Anda
+SMTP_PASSWORD = "demonakuma666"  # Ganti dengan password aplikasi jika 2FA aktif
 
 # Email details
-SENDER_EMAIL = "your_email@gmail.com"
-RECIPIENT_EMAIL = "friend_email@example.com"
+SENDER_EMAIL = "felix233401012@studentukdc.ac.id"  # Ganti dengan email pengirim
+RECIPIENT_EMAIL = "felixjuatsa@gmail.com"  # Ganti dengan email penerima
 SUBJECT = "Test Email from SMTP Client"
 BODY = "Hello, this is a test email sent from my custom SMTP client."
 
@@ -39,11 +40,36 @@ def send_email():
     # Establish TCP connection
     server_socket = create_connection(SMTP_SERVER, SMTP_PORT)
 
+    # Receive server's greeting message
+    greeting_response = send_command(server_socket, "")  # Expecting a "220" code
+    if "220" not in greeting_response:
+        print("Server greeting failed.")
+        server_socket.close()
+        return
+
     # Greet the server
-    send_command(server_socket, HELO_CMD)  # You can replace with EHLO_CMD if needed
+    send_command(server_socket, HELO_CMD)  # or EHLO_CMD if preferred (for extended features)
+    
+    # Request SSL for secure communication (this is necessary for port 587)
+    response = send_command(server_socket, SSL_CMD)
+    if "220" in response:
+        print("STARTTLS accepted, switching to secure connection")
+        # Wrap the socket in a TLS layer
+        context = ssl.create_default_context()
+        server_socket = context.wrap_socket(server_socket, server_hostname=SMTP_SERVER)
+        
+    # Greet the server
+    send_command(server_socket, HELO_CMD)  # or EHLO_CMD if preferred (for extended features)
+
+    # Request SSL for secure communication (this is necessary for port 587)
+    response = send_command(server_socket, SSL_CMD)
+    if "220" in response:
+        print("STARTTLS accepted, switching to secure connection")
+        # Wrap the socket in a TLS layer
+        context = ssl.create_default_context()
+        server_socket = context.wrap_socket(server_socket, server_hostname=SMTP_SERVER)
 
     # Authenticate (Optional - You may need this for servers that require authentication)
-    # For Gmail, you can use base64 encoding of the password in the AUTH command
     auth_cmd = "AUTH LOGIN\r\n"
     send_command(server_socket, auth_cmd)
     send_command(server_socket, base64.b64encode(SMTP_USER.encode()).decode() + "\r\n")
@@ -57,3 +83,10 @@ def send_email():
 
     # Start sending the email data
     send_command(server_socket, DATA_CMD)
+
+    # Send the email headers and body
+    email_content = f"Subject: {SUBJECT}\r\nTo: {RECIPIENT_EMAIL}\r\nFrom: {SENDER_EMAIL}\r\n\r\n{BODY}\r\n."
+    send_command(server_socket, email_content)
+
+    # Quit the session
+    send_command(server_socket, QUIT_CMD)
